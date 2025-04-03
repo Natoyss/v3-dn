@@ -153,96 +153,72 @@ local booths = {
 	["27"] = "83, 3, 42",
 	["28"] = "-8, 3, 151"
 }
-local TPService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-
 local queueonteleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport) or nil
 local httprequest = (syn and syn.request) or http and http.request or http_request or (fluxus and fluxus.request) or request
+local HttpService = game:GetService("HttpService")
+local TPService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
 
+-- Auto-rejoin kapag nag-teleport
 if queueonteleport then
-	queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/Natoyss/REMAKE-DONATION-FARM-/refs/heads/main/REMAKE-DONATION-FARM'))()")
+    queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/Natoyss/REMAKE-DONATION-FARM-/refs/heads/main/REMAKE-DONATION-FARM'))()")
 end
 
+-- Load UI Library
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/CF-Trail/tzechco-PlsDonateAutofarmBackup/main/UI"))()
 
+-- Load Highlight Library
 local _HIGHLIGHTLOADER
 pcall(function()
-	_HIGHLIGHTLOADER = loadstring(game:HttpGet('https://raw.githubusercontent.com/CF-Trail/tzechco-PlsDonateAutofarmBackup/main/hl.lib.lua'))()
+    _HIGHLIGHTLOADER = loadstring(game:HttpGet('https://raw.githubusercontent.com/CF-Trail/tzechco-PlsDonateAutofarmBackup/main/hl.lib.lua'))()
 end)
 
+-- Function para sa server hopping
 function forceServerHop()
-	local gameId = 8737602449 -- Game ID
-	local servers = {}
+    local gameId = "8737602449"
+    local servers = {}
 
-	-- ❗ Check if HTTP Request is available
-	if not httprequest then
-		warn("❌ HTTP request function not found. Switching to alternative method...")
-		return
-	end
+    -- Kumuha ng listahan ng servers
+    local success, response = pcall(function()
+        return httprequest({
+            Url = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Desc&limit=100"
+        })
+    end)
 
-	-- 🔄 Get server list
-	local success, response = pcall(function()
-		return httprequest({
-			Url = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Asc&limit=100"
-		})
-	end)
+    if success and response and response.Body then
+        local body = HttpService:JSONDecode(response.Body)
+        if body and body.data then
+            for _, v in ipairs(body.data) do
+                if type(v) == "table" and tonumber(v.playing) and tonumber(v.maxPlayers) and v.playing < v.maxPlayers then
+                    table.insert(servers, v.id)
+                end
+            end
+        end
+    end
 
-	-- ❗ Check if request was successful
-	if not success or not response or not response.Body then
-		warn("❌ Failed to get server list!")
-		return
-	end
-
-	local body = HttpService:JSONDecode(response.Body)
-
-	if body and body.data then
-		for _, v in ipairs(body.data) do
-			if v.id and v.playing and v.maxPlayers and v.playing < v.maxPlayers and v.id ~= game.JobId then
-				table.insert(servers, v.id)
-			end
-		end
-	end
-
-	-- ❗ Check if servers list is empty
-	if #servers == 0 then
-		warn("❌ No available servers found! Retrying in 5s...")
-		task.wait(5)
-		return forceServerHop()
-	end
-
-	-- ✅ Select a random server
-	local selectedServer = servers[math.random(1, #servers)]
-	print("🔄 Hopping to server:", selectedServer)
-
-	-- 🚀 Teleport to the selected server
-	local successTeleport, errorMessage = pcall(function()
-		TPService:TeleportToPlaceInstance(gameId, selectedServer, Players.LocalPlayer)
-	end)
-
-	-- 🔄 Retry if teleport fails
-	if not successTeleport then
-		warn("⚠️ Teleport failed! Retrying in 3s...", errorMessage)
-		task.wait(3)
-		return forceServerHop()
-	end
+    -- Mag-teleport sa isang available na server
+    if #servers > 0 then
+        local selectedServer = servers[math.random(1, #servers)]
+        TPService:TeleportToPlaceInstance(gameId, selectedServer, Players.LocalPlayer)
+    else
+        warn("Walang available na servers, susubukang muli mamaya.")
+    end
 end
 
+-- Function para i-save ang settings
 local settingsLock
 function saveSettings()
-	if not settingsLock then
-		local success, errorMsg = pcall(function()
-			writefile('plsdonatesettings.txt', HttpService:JSONEncode(getgenv().settings))
-		end)
-
-		if not success then
-			warn("⚠️ Failed to save settings:", errorMsg)
-		else
-			print("✅ Settings saved successfully!")
-		end
-	end
+    if not settingsLock then
+        local success, err = pcall(function()
+            writefile('plsdonatesettings.txt', HttpService:JSONEncode(getgenv().settings))
+        end)
+        if not success then
+            warn("Error sa pag-save ng settings:", err)
+        end
+    end
 end
 
+-- Global settings
 getgenv().settings = {}
 
 local sNames = {
